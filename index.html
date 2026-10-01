@@ -253,11 +253,19 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 <!-- Einstufung -->
 <section class="screen" id="s-testintro" hidden>
   <div class="end">
-    <h1>Kurzer Start-Check</h1>
-    <p style="max-width:42ch">Ein paar Aufgaben, damit das Studio weiß, wo du anfängst. Ohne Hilfe, ohne Zeitdruck. Wenn eine Stufe noch schwer ist, hört der Check dort auf.</p>
-    <button class="btn big" id="testGo">Start-Check beginnen</button>
-    <button class="link" id="testSkip">Überspringen und ganz vorne anfangen</button>
+    <h1>Wie möchtest du starten?</h1>
+    <p style="max-width:44ch">Der Start-Check findet in ein paar Minuten heraus, wo du stehst: ein paar Aufgaben, ohne Hilfe, ohne Zeitdruck. Oder du wählst deine Stufe selbst.</p>
+    <button class="btn big" id="testGo">🎯 Start-Check machen</button>
+    <button class="btn soft" id="testSkip">Stufe selbst wählen</button>
   </div>
+</section>
+
+<!-- Stufenwahl -->
+<section class="screen" id="s-stage" hidden>
+  <div class="row" style="justify-content:space-between"><h1>Stufe wählen</h1><button class="btn soft" id="stageBack">Zurück</button></div>
+  <p class="muted">Wähle, was du heute üben willst. Wenn eine Stufe sitzt, geht es danach automatisch weiter.</p>
+  <div class="choices" id="stagelist"></div>
+  <button class="link" id="stageTest">Lieber den Start-Check machen</button>
 </section>
 
 <!-- Start -->
@@ -272,7 +280,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
       <h2 id="stagename"></h2>
       <div class="prog"><i id="stageprog"></i></div>
       <p class="muted" id="stagehint"></p>
-      <div class="row"><button class="btn big" id="go">Training starten</button></div>
+      <div class="row"><button class="btn big" id="go">Training starten</button><button class="btn soft" id="stagePick">Stufe wählen</button></div>
     </div>
     <div class="card">
       <h3>Extras</h3>
@@ -599,7 +607,7 @@ function say(text,force,check,done){
 }
 
 /* ---------- Bildschirme ---------- */
-const screens=["who","choose","testintro","home","play","end","avatar","parent"];
+const screens=["who","choose","testintro","stage","home","play","end","avatar","parent"];
 function show(n){screens.forEach(s=>$("s-"+s).hidden=s!==n);window.scrollTo(0,0)}
 function setWorld(){document.body.dataset.world=S.world||"music"}
 function enter(){setWorld();if(!S.world||!WORLDS[S.world]){renderChoose();show("choose")}else if(!S.tested){show("testintro")}else{renderHome();show("home")}}
@@ -832,6 +840,11 @@ function finishTest(stage){
 }
 function quit(){clearInterval(tick);if(G){dayRec().ms+=Date.now()-G.t0;save()}const wasTest=G&&G.mode==="test";G=null;if(wasTest){show("testintro")}else{renderHome();show("home")}}
 
+function renderStages(){
+  $("stagelist").innerHTML=STAGES.slice(1).map((st,i)=>`<button class="choice" data-st="${i+1}" style="${i+1===S.stage&&S.tested?"outline:4px solid var(--accent)":""}"><span class="big" style="font-size:2.2rem;font-family:var(--f-display);font-weight:800">${i+1}</span><b style="font-size:1.1rem">${st.de}</b>${i+1===S.stage&&S.tested?"<span>gerade dran</span>":""}</button>`).join("");
+  $("stagelist").querySelectorAll("button").forEach(b=>b.onclick=()=>{audio();S.stage=+b.dataset.st;S.tested=true;save();renderHome();show("home")});
+  $("stageBack").hidden=!S.tested;
+}
 /* ---------- Avatar-Studio ---------- */
 let avSlot="hair",tryOn=null;
 function renderAvatar(){
@@ -914,7 +927,10 @@ renderKeypad();
 $("go").onclick=()=>{audio();startTrain()};
 $("blitz").onclick=()=>{audio();startBlitz()};
 $("testGo").onclick=()=>{audio();startTest()};
-$("testSkip").onclick=()=>{S.tested=true;S.stage=1;save();renderHome();show("home")};
+$("testSkip").onclick=()=>{renderStages();show("stage")};
+$("stagePick").onclick=()=>{renderStages();show("stage")};
+$("stageBack").onclick=()=>{renderHome();show("home")};
+$("stageTest").onclick=()=>{audio();startTest()};
 $("quit").onclick=quit;
 $("speak").onclick=()=>{if(G)say(spoken(G.cur.t),true,true)};
 $("helpBtn").onclick=showHelp;
