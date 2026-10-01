@@ -239,6 +239,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 <section class="screen" id="s-who" hidden>
   <h1>Wer rechnet heute?</h1>
   <div class="choices" id="wholist"></div>
+  <div class="row"><input id="whoName" maxlength="20" placeholder="Name" aria-label="Name des neuen Profils" style="font:inherit;font-size:1.2rem;padding:12px 14px;border-radius:14px;border:2px solid var(--line);background:var(--surface);color:var(--ink);max-width:100%"><button class="btn" id="whoAdd">+ Neues Profil</button></div>
+  <p class="muted" id="whoHint" hidden>Bitte zuerst einen Namen eingeben.</p>
 </section>
 
 <!-- Weltwahl -->
@@ -293,7 +295,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
   <div class="card" id="p-cards" hidden><h3 id="coltitle"></h3><div class="cards" id="cardlist"></div></div>
   <div class="row" style="justify-content:space-between">
     <div class="row"><button class="btn soft" id="tSound"></button><button class="btn soft" id="tVoice"></button></div>
-    <div class="row"><button class="link" id="whoBtn">Profil wechseln</button><button class="link" id="switch">Welt wechseln</button><button class="link" id="parentBtn">🔒 Fortschritt</button></div>
+    <div class="row"><button class="link" id="whoBtn">👤 Profile</button><button class="link" id="switch">Welt wechseln</button><button class="link" id="parentBtn">🔒 Fortschritt</button></div>
   </div>
   <p class="muted" id="voiceNote" hidden></p>
 </section>
@@ -581,13 +583,16 @@ let deVoice=null;
 function pickVoice(){if(!hasTTS)return;const v=speechSynthesis.getVoices();deVoice=v.find(x=>/^de[-_]DE/i.test(x.lang))||v.find(x=>/^de/i.test(x.lang))||null}
 if(hasTTS){pickVoice();speechSynthesis.onvoiceschanged=pickVoice}
 function voiceNote(t){$("voiceNote").textContent=t||"";$("voiceNote").hidden=!t}
-function say(text,force,check){
+function say(text,force,check,done){
+  let fired=false;const fin=()=>{if(!fired){fired=true;if(done)done()}};
+  if(!(S.voice||force)||!hasTTS){setTimeout(fin,0)}
   if(!(S.voice||force))return;
+  setTimeout(fin,Math.min(9000,1800+text.length*130));
   if(!hasTTS){voiceNote("Vorlesen geht in diesem Browser nicht. Öffne die Seite direkt in Safari oder Chrome.");return}
   try{if(speechSynthesis.speaking||speechSynthesis.pending)speechSynthesis.cancel();if(!deVoice)pickVoice();
     const u=new SpeechSynthesisUtterance(text);u.lang="de-DE";if(deVoice)u.voice=deVoice;u.rate=.9;let started=false;
     u.onstart=()=>{started=true;voiceNote("")};
-    u.onerror=e=>{if(e.error!=="interrupted"&&e.error!=="canceled")voiceNote("Vorlesen blockiert ("+e.error+"). Stummschalter prüfen oder Seite in Safari/Chrome öffnen.")};
+    u.onend=fin;u.onerror=e=>{fin();if(e.error!=="interrupted"&&e.error!=="canceled")voiceNote("Vorlesen blockiert ("+e.error+"). Stummschalter prüfen oder Seite in Safari/Chrome öffnen.")};
     speechSynthesis.resume();speechSynthesis.speak(u);
     if(check)setTimeout(()=>{if(!started)voiceNote("Keine Stimme zu hören? Stummschalter und Lautstärke prüfen. Auf dem iPad: Einstellungen › Bedienungshilfen › Gesprochene Inhalte › Stimmen › Deutsch.")},2500);
   }catch(e){voiceNote("Vorlesen geht in diesem Browser nicht.")}
@@ -640,7 +645,6 @@ function renderHome(){
   ["tafel","badges","cards"].forEach(k=>$("p-"+k).hidden=k!==S.tab);
   $("tSound").textContent=S.sound?"🔔 Ton an":"🔕 Ton aus";
   $("tVoice").textContent=S.voice?"🗣️ Vorlesen an":"🤐 Vorlesen aus";
-  $("whoBtn").hidden=ROOT.order.length<2;
 }
 
 /* ---------- Spiel ---------- */
@@ -721,6 +725,7 @@ function pickTask(){
   return gen(S.stage);
 }
 function next(){
+  if(!G)return;
   if(G.mode==="train"&&(G.done>=G.total||Date.now()-G.t0>MAX_MS))return finishTrain();
   if(G.mode==="test"&&G.tCount>=3){
     if(G.tOk>=2&&G.tStage<7){G.tStage++;G.tCount=0;G.tOk=0}
@@ -763,8 +768,8 @@ function submit(){
     else{G.tCount++;if(first)G.tOk++;record(t,first)}
     drawEq("good");sndOk();if(G.mode!=="test")burst();
     $("msg").textContent=PRAISE[rnd(0,PRAISE.length-1)];$("msg").className="msg good";
-    const talk=S.voice&&G.mode==="train";if(talk)say(spokenFull(t));
-    setTimeout(next,G.mode==="blitz"?350:talk?2600:800);return;
+    const talk=S.voice&&G.mode==="train";const g=G;
+    if(talk)say(spokenFull(t),false,false,()=>setTimeout(()=>{if(G===g)next()},400));else setTimeout(next,G.mode==="blitz"?350:800);return;
   }
   c.tries++;sndBad();
   $("taskcard").classList.remove("shake");void $("taskcard").offsetWidth;$("taskcard").classList.add("shake");
@@ -772,7 +777,7 @@ function submit(){
   if(c.tries===1){G.inp=["",""];G.field=0;drawEq();showHelp();$("msg").textContent="Noch nicht. Schau dir den Tipp an und versuch es nochmal.";$("msg").className="msg bad"}
   else{lock=true;record(t,false);G.retry.push({t,due:G.done+3});G.done++;
     drawEq("reveal");$("msg").textContent="Die Lösung steht im Kästchen. Die Aufgabe kommt gleich noch einmal.";$("msg").className="msg";
-    say(spokenFull(t));setTimeout(next,3200)}
+    const g=G;if(S.voice)say(spokenFull(t),false,false,()=>setTimeout(()=>{if(G===g)next()},900));else setTimeout(next,3200)}
 }
 function checkBadges(ctx){
   const got=[];const give=id=>{if(!S.badges[id]){S.badges[id]=dayKey();got.push(BADGES.find(b=>b.id===id))}};
@@ -915,6 +920,7 @@ $("speak").onclick=()=>{if(G)say(spoken(G.cur.t),true,true)};
 $("helpBtn").onclick=showHelp;
 $("switch").onclick=()=>{renderChoose();show("choose")};
 $("whoBtn").onclick=()=>{renderWho();show("who")};
+$("whoAdd").onclick=()=>{const n=$("whoName").value.trim();$("whoHint").hidden=!!n;if(!n){$("whoName").focus();return}const id=addProfile(n);$("whoName").value="";audio();useProfile(id);enter()};
 $("avBtn").onclick=()=>{tryOn=null;renderAvatar();show("avatar")};
 $("avBack").onclick=()=>{tryOn=null;renderHome();show("home")};
 document.querySelectorAll(".tab[data-tab]").forEach(t=>t.onclick=()=>{S.tab=t.dataset.tab;save();renderHome()});
